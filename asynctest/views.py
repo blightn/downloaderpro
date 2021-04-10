@@ -22,6 +22,9 @@ download_path = os.path.join(settings.BASE_DIR, 'downloads')
 
 
 async def index(request):
+    if not os.path.exists(download_path):
+        os.makedirs(download_path)
+
     return HttpResponse(
         '<h1 align="center">Downloader Pro</h1>'
         '<br>'
