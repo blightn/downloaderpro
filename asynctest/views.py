@@ -3,6 +3,7 @@ from django.http import HttpResponse
 import asyncio
 import os
 from django.conf import settings
+import time
 
 import requests
 from asgiref.sync import sync_to_async
@@ -26,12 +27,14 @@ async def index(request):
         os.makedirs(download_path)
 
     return HttpResponse(
+        '<br>'
         '<h1 align="center">Downloader Pro</h1>'
         '<br>'
         '<p align="center"><a href="download1/">Download (requests)</a></p>'
         '<p align="center"><a href="download2/">Download (asyncio)</a></p>'
         '<p align="center"><a href="download3/">Download (gather)</a></p>'
         '<p align="center"><a href="download4/">Download (as_completed)</a></p>'
+        '<p align="center"><a href="download5/">Download (queue)</a></p>'
         )
 
 
@@ -74,29 +77,19 @@ async def download_async2(file_url):
 # requests
 # Ждёт завершения.
 async def download1(request):
-    '''
-    loop = asyncio.get_event_loop()
-
-    for url in files_for_downloading:
-        loop.create_task(download_async1(url))
-    '''
+    start = time.perf_counter()
 
     for url in files_for_downloading:
         asyncio.create_task(download_async1(url))
 
-    return HttpResponse('<h1 align="center">Downloaded</h1>')
+    elapsed = time.perf_counter() - start
+
+    return HttpResponse(f'<h1 align="center">Downloaded in {elapsed:.3f} seconds</h1>') # '0.000'
 
 
 # asyncio
 # Не ждёт завершения.
 async def download2(request):
-    '''
-    loop = asyncio.get_event_loop()
-
-    for url in files_for_downloading:
-        loop.create_task(download_async2(url))
-    '''
-
     for url in files_for_downloading:
         asyncio.create_task(download_async2(url))
 
@@ -106,15 +99,21 @@ async def download2(request):
 # gather
 # Ждёт завершения.
 async def download3(request):
+    start = time.perf_counter()
+
     coros = [download_async2(url) for url in files_for_downloading]
     await asyncio.gather(*coros)
 
-    return HttpResponse('<h1 align="center">Downloaded</h1>')
+    elapsed = time.perf_counter() - start
+
+    return HttpResponse(f'<h1 align="center">Downloaded in {elapsed:.3f} seconds</h1>')
 
 
 # as_completed
 # Ждёт завершения.
 async def download4(request):
+    start = time.perf_counter()
+
     coros = [download_async2(url) for url in files_for_downloading]
     
     for future in asyncio.as_completed(coros):
@@ -124,4 +123,50 @@ async def download4(request):
         except Exception:
             print(f'Error while downloading file {file_name}')
 
-    return HttpResponse('<h1 align="center">Downloaded</h1>')
+    elapsed = time.perf_counter() - start
+
+    return HttpResponse(f'<h1 align="center">Downloaded in {elapsed:.3f} seconds</h1>')
+
+
+async def produce(name: int, q: asyncio.Queue) -> None:
+    print(f'produce(): {name}')
+
+    for n in range(5):
+        print(f'put(): {name}')
+        await q.put(name)
+        await asyncio.sleep(1)
+
+
+async def consume(name: int, q: asyncio.Queue) -> None:
+    print(f'consume(): {name}')
+
+    while True:
+        n = await q.get()
+        q.task_done()
+
+        print(f'task done: {n}')
+
+
+PRODUCER_COUNT = 2
+CONSUMER_COUNT = 2
+
+
+# queue
+# Ждёт завершения.
+async def download5(request):
+    start = time.perf_counter()
+
+    q = asyncio.Queue()
+
+    producers = [asyncio.create_task(produce(n, q)) for n in range(PRODUCER_COUNT)]
+    consumers = [asyncio.create_task(consume(n, q)) for n in range(CONSUMER_COUNT)]
+
+    await asyncio.gather(*producers)
+    await q.join() # Implicitly awaits consumers, too
+
+    for c in consumers:
+        c.cancel()
+
+    elapsed = time.perf_counter() - start
+
+    return HttpResponse(f'<h1 align="center">Downloaded in {elapsed:.3f} seconds</h1>')

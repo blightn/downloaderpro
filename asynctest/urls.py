@@ -16,7 +16,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
-from asynctest.views import index, download1, download2, download3, download4
+from asynctest.views import index, download1, download2, download3, download4, download5
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -25,4 +25,5 @@ urlpatterns = [
     path("download2/", download2),
     path("download3/", download3),
     path("download4/", download4),
+    path("download5/", download5),
 ]
